@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _status = '';
   String? _error;
   AiResult? _result;
+  final Set<int> _picked = {};
 
   static const List<List<String>> _refines = [
     ['Lebih singkat', 'buat lebih singkat dan padat'],
@@ -136,7 +137,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _generate({String instruction = ''}) async {
+  Future<void> _generate(
+      {String instruction = '', bool keepAvoid = true}) async {
     final s = widget.settings;
     final chat = _chatCtl.text.trim();
     final extra = _extraCtl.text.trim();
@@ -160,14 +162,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         chat: chat,
         extra: extra,
         instruction: instruction,
-        avoid: _result?.replies.map((e) => e.text).toList() ?? const [],
+        avoid: keepAvoid
+            ? (_result?.replies.map((e) => e.text).toList() ??
+                const <String>[])
+            : const <String>[],
         imagePath: useImage ? _imagePath : null,
         contact: s.memoryContact,
       );
       if (!mounted) return;
       final mc = s.memoryContact;
       if (mc != null) s.updateContact(mc, chat: chat, memory: res.memory);
-      setState(() => _result = res);
+      setState(() {
+        _result = res;
+        _picked.clear();
+      });
       if (s.saveHistory) {
         final prev = chat.length > 160 ? chat.substring(chat.length - 160) : chat;
         s.addHistory(HistoryItem(
@@ -575,6 +583,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _mix() async {
+    final r = _result;
+    if (r == null || _picked.length < 2) return;
+    final idx = _picked.toList()..sort();
+    final b = StringBuffer(
+        'Gabungkan balasan-balasan berikut menjadi 3 versi baru yang lebih bagus. Ambil kelebihan masing-masing (ide, humor, kehangatan, pertanyaan balik) lalu tulis ulang agar mengalir natural seperti satu pesan utuh, bukan sekadar disambung. Jangan lebih panjang dari yang perlu. Balasan sumber:\n');
+    var n = 1;
+    for (final i in idx) {
+      if (i < r.replies.length) {
+        b.writeln('$n) ${r.replies[i].text}');
+        n++;
+      }
+    }
+    await _generate(instruction: b.toString(), keepAvoid: false);
+  }
+
   List<Widget> _resultWidgets(BuildContext context) {
     final r = _result!;
     final cs = Theme.of(context).colorScheme;
@@ -596,8 +620,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
         ),
-      ...r.replies.map((e) => Card(
-            child: Padding(
+      ...r.replies.asMap().entries.map((en) {
+        final e = en.value;
+        final i = en.key;
+        final on = _picked.contains(i);
+        return Card(
+          color: on ? cs.primaryContainer : null,
+          child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 8, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,18 +642,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   const SizedBox(height: 4),
                   SelectableText(e.text, style: const TextStyle(fontSize: 16)),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => _copy(e.text),
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text('Salin'),
-                    ),
+                  Row(
+                    children: [
+                      FilterChip(
+                        avatar: Icon(
+                            on
+                                ? Icons.check_circle
+                                : Icons.add_circle_outline,
+                            size: 18),
+                        label: const Text('Gabung'),
+                        selected: on,
+                        onSelected: _busy
+                            ? null
+                            : (v) => setState(() {
+                                  if (v) {
+                                    _picked.add(i);
+                                  } else {
+                                    _picked.remove(i);
+                                  }
+                                }),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => _copy(e.text),
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text('Salin'),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          )),
+        );
+      }),
+      if (_picked.length >= 2)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _mix,
+            icon: const Icon(Icons.merge_type),
+            label: Text('Gabungkan ${_picked.length} pilihan'),
+          ),
+        )
+      else
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+            'Tips: tandai "Gabung" di 2 balasan atau lebih, lalu gabungkan jadi versi yang lebih bagus.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ),
       const SectionTitle('Ubah hasil'),
       Wrap(
         spacing: 8,

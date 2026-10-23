@@ -21,6 +21,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _cModel;
   late final TextEditingController _about;
   late final TextEditingController _style;
+  late final TextEditingController _prompt;
+
+  static const List<List<String>> _promptExamples = [
+    [
+      'Cowok santai',
+      'Kamu menulis sebagai cowok santai, humoris tapi kalem. Balasan singkat, tidak lebay, tidak sok puitis. Selalu tutup dengan pertanyaan ringan agar obrolan lanjut.'
+    ],
+    [
+      'Cuek tapi hangat',
+      'Tulis dengan gaya cuek tapi hangat. Jangan terlalu antusias, jangan pakai kata berlebihan. Sesekali selipkan perhatian kecil yang spesifik pada hal yang Dia ceritakan.'
+    ],
+    [
+      'Humor receh',
+      'Pakai humor receh dan permainan kata ringan. Maksimal satu candaan per balasan, dan jangan menyinggung.'
+    ],
+    [
+      'Dewasa & tenang',
+      'Tulis dengan gaya dewasa, tenang, dan percaya diri. Tidak pakai singkatan alay. Fokus pada obrolan yang bermakna dan jujur.'
+    ],
+  ];
 
   static const List<Opt> _providers = [
     Opt('gemini', 'Gemini', ''),
@@ -37,6 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cModel = TextEditingController(text: s.claudeModel);
     _about = TextEditingController(text: s.aboutMe);
     _style = TextEditingController(text: s.styleSample);
+    _prompt = TextEditingController(text: s.customPrompt);
   }
 
   @override
@@ -47,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cModel.dispose();
     _about.dispose();
     _style.dispose();
+    _prompt.dispose();
     super.dispose();
   }
 
@@ -203,6 +225,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'Chat dan ringkasan per lawan bicara disimpan di HP, lalu ikut dikirim ke AI sebagai konteks'),
                   value: s.useMemory,
                   onChanged: (v) => s.update(() => s.useMemory = v),
+                ),
+                const SectionTitle('Prompt kustom'),
+                _field(
+                  _prompt,
+                  'Instruksi untuk AI (opsional)',
+                  (v) => s.update(() => s.customPrompt = v),
+                  lines: 5,
+                  hint:
+                      'Contoh: Kamu adalah aku, cowok santai. Jangan pakai kata "banget". Selalu balas dengan pertanyaan balik.',
+                ),
+                const Text(
+                  'Instruksi ini jadi aturan utama untuk AI dan mengalahkan preferensi lain. Format hasil tetap dijaga. Ketuk contoh di bawah untuk mengisi otomatis.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ..._promptExamples.map((x) => ActionChip(
+                          label: Text(x[0]),
+                          onPressed: () {
+                            _prompt.text = x[1];
+                            s.update(() => s.customPrompt = x[1]);
+                          },
+                        )),
+                    ActionChip(
+                      avatar: const Icon(Icons.clear, size: 18),
+                      label: const Text('Kosongkan'),
+                      onPressed: () {
+                        _prompt.clear();
+                        s.update(() => s.customPrompt = '');
+                      },
+                    ),
+                  ],
                 ),
                 const SectionTitle('Gaya bicara'),
                 _field(

@@ -166,6 +166,7 @@ class AppSettings extends ChangeNotifier {
   bool hideTip = false;
 
   bool useMemory = true;
+  String customPrompt = '';
   String styleSample = '';
   bool lowercaseAll = false;
   bool noPeriod = false;
@@ -217,6 +218,7 @@ class AppSettings extends ChangeNotifier {
     hideTip = p.getBool('hideTip') ?? hideTip;
     useMemory = p.getBool('useMemory') ?? useMemory;
     styleSample = p.getString('styleSample') ?? styleSample;
+    customPrompt = p.getString('customPrompt') ?? customPrompt;
     lowercaseAll = p.getBool('lowercaseAll') ?? lowercaseAll;
     noPeriod = p.getBool('noPeriod') ?? noPeriod;
     activeContactId = p.getString('activeContactId');
@@ -339,6 +341,7 @@ class AppSettings extends ChangeNotifier {
     await p.setBool('hideTip', hideTip);
     await p.setBool('useMemory', useMemory);
     await p.setString('styleSample', styleSample);
+    await p.setString('customPrompt', customPrompt);
     await p.setBool('lowercaseAll', lowercaseAll);
     await p.setBool('noPeriod', noPeriod);
     await p.setString('rules', jsonEncode(rules));
