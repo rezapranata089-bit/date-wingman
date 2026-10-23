@@ -52,6 +52,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.1'
           channel: stable
           cache: true
 
@@ -62,7 +63,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK (release, arm64 only)
-        run: flutter build apk --release --target-platform android-arm64 --split-debug-info=build/symbols --no-pub
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --obfuscate --split-debug-info=build/symbols --no-pub
 
       - name: Stop Gradle daemon
         if: always()
@@ -87,7 +88,7 @@ jobs:
           key: android-ndk-cmake-${{ runner.os }}-v1
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk DateWingman.apk
+        run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk DateWingman.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -96,6 +97,13 @@ jobs:
           path: DateWingman.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: DateWingman-symbols
+          path: build/symbols
+          retention-days: 90
 
       - name: Publish GitHub Release (tag v*)
         if: startsWith(github.ref, 'refs/tags/v')
