@@ -8,7 +8,8 @@ import 'settings_store.dart';
 
 class AiException implements Exception {
   final String message;
-  AiException(this.message);
+  final int? status;
+  AiException(this.message, {this.status});
   @override
   String toString() => message;
 }
@@ -170,9 +171,11 @@ class AiService {
       hasImage: b64 != null,
     );
     try {
-      final raw = s.provider == 'claude'
-          ? await _callClaude(s, system, user, b64, mime)
-          : await _callGemini(s, system, user, b64, mime);
+      final raw = await _withKeys(
+          s,
+          (key) => s.provider == 'claude'
+              ? _callClaude(s, system, user, b64, mime, key)
+              : _callGemini(s, system, user, b64, mime, key));
       final r = _parse(raw);
       return AiResult(
         analysis: r.analysis,
@@ -190,7 +193,7 @@ class AiService {
   }
 
   static Future<String> _callGemini(AppSettings s, String system, String user,
-      String? b64, String mime) async {
+      String? b64, String mime, String key) async {
     final uri = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/${s.geminiModel}:generateContent');
     final parts = <Map<String, dynamic>>[];
@@ -218,11 +221,13 @@ class AiService {
         .post(uri,
             headers: {
               'Content-Type': 'application/json',
-              'x-goog-api-key': s.geminiKey,
+              'x-goog-api-key': key,
             },
             body: jsonEncode(body))
         .timeout(const Duration(seconds: 60));
-    if (r.statusCode != 200) throw AiException(_errMsg(r));
+    if (r.statusCode != 200) {
+      throw AiException(_errMsg(r), status: r.statusCode);
+    }
     final j = jsonDecode(utf8.decode(r.bodyBytes));
     final cands = j['candidates'] as List?;
     if (cands == null || cands.isEmpty) {
@@ -234,7 +239,7 @@ class AiService {
   }
 
   static Future<String> _callClaude(AppSettings s, String system, String user,
-      String? b64, String mime) async {
+      String? b64, String mime, String key) async {
     final uri = Uri.parse('https://api.anthropic.com/v1/messages');
     final content = <Map<String, dynamic>>[];
     if (b64 != null) {
@@ -256,18 +261,60 @@ class AiService {
         .post(uri,
             headers: {
               'content-type': 'application/json',
-              'x-api-key': s.claudeKey,
+              'x-api-key': key,
               'anthropic-version': '2023-06-01',
             },
             body: jsonEncode(body))
         .timeout(const Duration(seconds: 60));
-    if (r.statusCode != 200) throw AiException(_errMsg(r));
+    if (r.statusCode != 200) {
+      throw AiException(_errMsg(r), status: r.statusCode);
+    }
     final j = jsonDecode(utf8.decode(r.bodyBytes));
     final list = (j['content'] as List?) ?? [];
     return list
         .where((c) => c['type'] == 'text')
         .map((c) => '${c['text'] ?? ''}')
         .join();
+  }
+
+  static final Map<String, DateTime> _cooldown = {};
+
+  static Duration? _cooldownFor(int? st) {
+    if (st == null) return null;
+    if (st == 429) return const Duration(seconds: 60);
+    if (st == 400 || st == 401 || st == 403) return const Duration(hours: 1);
+    if (st >= 500) return const Duration(seconds: 20);
+    return null;
+  }
+
+  static Future<String> _withKeys(
+      AppSettings s, Future<String> Function(String key) call) async {
+    final keys = s.activeKeys;
+    if (keys.isEmpty) throw AiException('API key belum diisi.');
+    final now = DateTime.now();
+    bool cooling(String k) => _cooldown[k]?.isAfter(now) ?? false;
+    final order = [
+      ...keys.where((k) => !cooling(k)),
+      ...keys.where(cooling),
+    ];
+    AiException? last;
+    for (final k in order) {
+      try {
+        final r = await call(k);
+        _cooldown.remove(k);
+        return r;
+      } on AiException catch (e) {
+        final cd = _cooldownFor(e.status);
+        if (cd == null) rethrow;
+        _cooldown[k] = DateTime.now().add(cd);
+        last = e;
+      }
+    }
+    final msg = last?.message ?? 'Gagal menghubungi AI.';
+    if (keys.length > 1) {
+      throw AiException('Semua ${keys.length} API key gagal. Terakhir: $msg');
+    }
+    throw AiException(msg);
   }
 
   static String _errMsg(http.Response r) {

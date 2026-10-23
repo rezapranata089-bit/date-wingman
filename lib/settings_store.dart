@@ -188,6 +188,14 @@ class AppSettings extends ChangeNotifier {
   String get activeKey => provider == 'claude' ? claudeKey : geminiKey;
   String get activeModel => provider == 'claude' ? claudeModel : geminiModel;
 
+  static List<String> splitKeys(String raw) => raw
+      .split(RegExp(r'[\s,;]+'))
+      .where((e) => e.isNotEmpty)
+      .toSet()
+      .toList();
+
+  List<String> get activeKeys => splitKeys(activeKey);
+
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     _p = p;

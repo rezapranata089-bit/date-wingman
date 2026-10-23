@@ -57,14 +57,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool secret = false,
     int lines = 1,
     String? hint,
+    bool keys = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: c,
         obscureText: secret,
-        enableSuggestions: !secret,
-        autocorrect: !secret,
+        enableSuggestions: !(secret || keys),
+        autocorrect: !(secret || keys),
         minLines: lines,
         maxLines: secret ? 1 : (lines > 1 ? lines + 2 : 1),
         onChanged: onChanged,
@@ -165,18 +166,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (s.provider == 'gemini') ...[
-                  _field(_gKey, 'API key Gemini',
+                  _field(_gKey, 'API key Gemini (satu per baris)',
                       (v) => s.update(() => s.geminiKey = v.trim()),
-                      secret: true),
+                      lines: 3, keys: true, hint: 'AIza...\nAIza...'),
                   _field(_gModel, 'Model Gemini',
                       (v) => s.update(() => s.geminiModel = v.trim())),
                 ] else ...[
-                  _field(_cKey, 'API key Claude',
+                  _field(_cKey, 'API key Claude (satu per baris)',
                       (v) => s.update(() => s.claudeKey = v.trim()),
-                      secret: true),
+                      lines: 3, keys: true, hint: 'sk-ant-...\nsk-ant-...'),
                   _field(_cModel, 'Model Claude',
                       (v) => s.update(() => s.claudeModel = v.trim())),
                 ],
+                Text(
+                  'Terdeteksi ${s.activeKeys.length} key. Urutan = prioritas. Jika key gagal (kuota habis, key salah, atau server error), otomatis pakai key berikutnya.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 4),
                 const Text(
                   'API key disimpan di HP kamu. Untuk rilis publik, sebaiknya pakai server sendiri agar key tidak ikut di dalam aplikasi.',
                   style: TextStyle(fontSize: 12),
