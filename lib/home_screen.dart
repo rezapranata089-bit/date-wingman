@@ -162,8 +162,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         instruction: instruction,
         avoid: _result?.replies.map((e) => e.text).toList() ?? const [],
         imagePath: useImage ? _imagePath : null,
+        contact: s.memoryContact,
       );
       if (!mounted) return;
+      final mc = s.memoryContact;
+      if (mc != null) s.updateContact(mc, chat: chat, memory: res.memory);
       setState(() => _result = res);
       if (s.saveHistory) {
         final prev = chat.length > 160 ? chat.substring(chat.length - 160) : chat;
@@ -235,6 +238,111 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  Future<void> _contactDialog({Contact? edit}) async {
+    final nameCtl = TextEditingController(text: edit?.name ?? '');
+    final notesCtl = TextEditingController(text: edit?.notes ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(edit == null ? 'Lawan bicara baru' : 'Edit lawan bicara'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Nama',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: notesCtl,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Catatan (opsional)',
+                hintText: 'Kenalan di Bumble, suka kucing',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Simpan')),
+        ],
+      ),
+    );
+    final name = nameCtl.text.trim();
+    final notes = notesCtl.text.trim();
+    if (ok != true || name.isEmpty) return;
+    final s = widget.settings;
+    if (edit == null) {
+      s.addContact(name, notes);
+    } else {
+      s.update(() {
+        edit.name = name;
+        edit.notes = notes;
+      });
+    }
+  }
+
+  Widget _contactCard(Contact c, AppSettings s) {
+    final info = '${c.log.length} pesan tersimpan'
+        '${s.useMemory ? '' : ' (memori nonaktif)'}';
+    return Card(
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Icons.psychology_outlined),
+        title: Text('Memori ${c.name}'),
+        subtitle: Text(info),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(c.memory.isEmpty
+              ? 'Belum ada ringkasan. Terisi otomatis setelah balasan dibuat.'
+              : c.memory),
+          if (c.notes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Catatan: ${c.notes}'),
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _contactDialog(edit: c),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => s.update(() {
+                  c.memory = '';
+                  c.log.clear();
+                }),
+                icon: const Icon(Icons.restart_alt, size: 18),
+                label: const Text('Reset memori'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => s.removeContact(c.id),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Hapus'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.settings;
@@ -298,6 +406,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
+                const SectionTitle('Lawan bicara'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Tanpa memori'),
+                      selected: s.activeContact == null,
+                      onSelected: (_) =>
+                          s.update(() => s.activeContactId = null),
+                    ),
+                    ...s.contacts.map((c) => ChoiceChip(
+                          label: Text(c.name),
+                          selected: c.id == s.activeContactId,
+                          onSelected: (_) =>
+                              s.update(() => s.activeContactId = c.id),
+                        )),
+                    ActionChip(
+                      avatar: const Icon(Icons.person_add_alt, size: 18),
+                      label: const Text('Baru'),
+                      onPressed: () => _contactDialog(),
+                    ),
+                  ],
+                ),
+                if (s.activeContact != null)
+                  _contactCard(s.activeContact!, s),
                 const SectionTitle('Nada balasan'),
                 OptChips(
                   options: kTones,
@@ -420,6 +554,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: Text(_error!, style: TextStyle(color: cs.error)),
                   ),
                 if (_result != null) ..._resultWidgets(context),
+                if (s.templates.isNotEmpty) ...[
+                  const SectionTitle('Balasan cepat (ketuk untuk salin)'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: s.templates
+                        .map((t) => ActionChip(
+                              label: Text(t),
+                              onPressed: () => _copy(t),
+                            ))
+                        .toList(),
+                  ),
+                ],
               ],
             ),
           ),

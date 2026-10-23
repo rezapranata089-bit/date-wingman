@@ -20,6 +20,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _cKey;
   late final TextEditingController _cModel;
   late final TextEditingController _about;
+  late final TextEditingController _style;
 
   static const List<Opt> _providers = [
     Opt('gemini', 'Gemini', ''),
@@ -35,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cKey = TextEditingController(text: s.claudeKey);
     _cModel = TextEditingController(text: s.claudeModel);
     _about = TextEditingController(text: s.aboutMe);
+    _style = TextEditingController(text: s.styleSample);
   }
 
   @override
@@ -44,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cKey.dispose();
     _cModel.dispose();
     _about.dispose();
+    _style.dispose();
     super.dispose();
   }
 
@@ -72,6 +75,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  Future<List<String>?> _askFields(String title, List<String> labels) async {
+    final cs = labels.map((_) => TextEditingController()).toList();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextField(
+                  controller: cs[i],
+                  autofocus: i == 0,
+                  decoration: InputDecoration(
+                    labelText: labels[i],
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (ok != true) return null;
+    final v = cs.map((e) => e.text.trim()).toList();
+    if (v.any((e) => e.isEmpty)) return null;
+    return v;
+  }
+
+  Future<void> _addRule() async {
+    final v = await _askFields(
+        'Ganti kata', ['Kata asli (mis. kamu)', 'Jadi (mis. kmu)']);
+    if (v == null) return;
+    widget.settings.update(() => widget.settings.rules.add(v));
+  }
+
+  Future<void> _addTemplate() async {
+    final v = await _askFields('Template baru', ['Isi template']);
+    if (v == null) return;
+    widget.settings.update(() => widget.settings.templates.add(v[0]));
+  }
+
+  void _presetRules() {
+    final s = widget.settings;
+    s.update(() {
+      for (final r in kPresetRules) {
+        if (!s.rules.any((x) => x[0] == r[0])) s.rules.add([r[0], r[1]]);
+      }
+    });
   }
 
   Future<void> _openAssist() async {
@@ -124,6 +188,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   (v) => s.update(() => s.aboutMe = v),
                   lines: 3,
                   hint: 'Contoh: suka kopi dan hiking, kerja di IT, humoris tapi kalem',
+                ),
+                const SectionTitle('Memori percakapan'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Ingat obrolan sebelumnya'),
+                  subtitle: const Text(
+                      'Chat dan ringkasan per lawan bicara disimpan di HP, lalu ikut dikirim ke AI sebagai konteks'),
+                  value: s.useMemory,
+                  onChanged: (v) => s.update(() => s.useMemory = v),
+                ),
+                const SectionTitle('Gaya bicara'),
+                _field(
+                  _style,
+                  'Contoh caramu chatting',
+                  (v) => s.update(() => s.styleSample = v),
+                  lines: 3,
+                  hint: 'Contoh: gpp kok, nanti aku kabarin ya. wkwk iya sih',
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Huruf kecil semua'),
+                  value: s.lowercaseAll,
+                  onChanged: (v) => s.update(() => s.lowercaseAll = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Hilangkan titik di akhir balasan'),
+                  value: s.noPeriod,
+                  onChanged: (v) => s.update(() => s.noPeriod = v),
+                ),
+                const SizedBox(height: 8),
+                const Text('Ganti kata otomatis (contoh: kamu → kmu)'),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ...List.generate(
+                      s.rules.length,
+                      (i) => InputChip(
+                        label: Text('${s.rules[i][0]} → ${s.rules[i][1]}'),
+                        onDeleted: () => s.update(() => s.rules.removeAt(i)),
+                      ),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text('Tambah'),
+                      onPressed: _addRule,
+                    ),
+                    ActionChip(
+                      label: const Text('Preset gaul'),
+                      onPressed: _presetRules,
+                    ),
+                  ],
+                ),
+                const SectionTitle('Template balasan cepat'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ...List.generate(
+                      s.templates.length,
+                      (i) => InputChip(
+                        label: Text(s.templates[i]),
+                        onDeleted: () =>
+                            s.update(() => s.templates.removeAt(i)),
+                      ),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text('Tambah'),
+                      onPressed: _addTemplate,
+                    ),
+                  ],
                 ),
                 const SectionTitle('Preferensi default'),
                 const Text('Bahasa'),

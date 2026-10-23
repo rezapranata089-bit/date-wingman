@@ -98,6 +98,51 @@ class HistoryItem {
       );
 }
 
+class Contact {
+  String id;
+  String name;
+  String notes;
+  String memory;
+  List<String> log;
+
+  Contact({
+    required this.id,
+    required this.name,
+    this.notes = '',
+    this.memory = '',
+    List<String>? log,
+  }) : log = log ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'notes': notes,
+        'memory': memory,
+        'log': log,
+      };
+
+  factory Contact.fromJson(Map<String, dynamic> j) => Contact(
+        id: '${j['id'] ?? ''}',
+        name: '${j['name'] ?? ''}',
+        notes: '${j['notes'] ?? ''}',
+        memory: '${j['memory'] ?? ''}',
+        log: ((j['log'] as List?) ?? []).map((e) => '$e').toList(),
+      );
+}
+
+const List<List<String>> kPresetRules = [
+  ['kamu', 'kmu'],
+  ['tidak', 'gak'],
+  ['nggak', 'gak'],
+  ['sudah', 'udah'],
+  ['yang', 'yg'],
+  ['dengan', 'dgn'],
+  ['kalau', 'kalo'],
+  ['bagaimana', 'gimana'],
+  ['terima kasih', 'makasih'],
+  ['sama-sama', 'sm2'],
+];
+
 class AppSettings extends ChangeNotifier {
   SharedPreferences? _p;
 
@@ -120,7 +165,25 @@ class AppSettings extends ChangeNotifier {
   bool saveHistory = true;
   bool hideTip = false;
 
+  bool useMemory = true;
+  String styleSample = '';
+  bool lowercaseAll = false;
+  bool noPeriod = false;
+  List<List<String>> rules = [];
+  List<String> templates = [];
+  List<Contact> contacts = [];
+  String? activeContactId;
+
   List<HistoryItem> history = [];
+
+  Contact? get activeContact {
+    for (final c in contacts) {
+      if (c.id == activeContactId) return c;
+    }
+    return null;
+  }
+
+  Contact? get memoryContact => useMemory ? activeContact : null;
 
   String get activeKey => provider == 'claude' ? claudeKey : geminiKey;
   String get activeModel => provider == 'claude' ? claudeModel : geminiModel;
@@ -144,6 +207,26 @@ class AppSettings extends ChangeNotifier {
     useVision = p.getBool('useVision') ?? useVision;
     saveHistory = p.getBool('saveHistory') ?? saveHistory;
     hideTip = p.getBool('hideTip') ?? hideTip;
+    useMemory = p.getBool('useMemory') ?? useMemory;
+    styleSample = p.getString('styleSample') ?? styleSample;
+    lowercaseAll = p.getBool('lowercaseAll') ?? lowercaseAll;
+    noPeriod = p.getBool('noPeriod') ?? noPeriod;
+    activeContactId = p.getString('activeContactId');
+    try {
+      final cr = p.getString('contacts');
+      if (cr != null) {
+        contacts = (jsonDecode(cr) as List)
+            .map((e) => Contact.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      final rr = p.getString('rules');
+      if (rr != null) {
+        rules = (jsonDecode(rr) as List)
+            .map((e) => (e as List).map((x) => '$x').toList())
+            .toList();
+      }
+      templates = p.getStringList('templates') ?? templates;
+    } catch (_) {}
     final raw = p.getString('history');
     if (raw != null) {
       try {
@@ -182,6 +265,51 @@ class AppSettings extends ChangeNotifier {
     _save();
   }
 
+  void addContact(String name, String notes) {
+    final c = Contact(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: name,
+      notes: notes,
+    );
+    contacts.add(c);
+    activeContactId = c.id;
+    notifyListeners();
+    _save();
+  }
+
+  void removeContact(String id) {
+    contacts.removeWhere((c) => c.id == id);
+    if (activeContactId == id) activeContactId = null;
+    notifyListeners();
+    _save();
+  }
+
+  void updateContact(Contact c, {String chat = '', String memory = ''}) {
+    final seen = c.log.toSet();
+    for (final raw in chat.split('\n')) {
+      final l = raw.trim();
+      if (l.isEmpty || seen.contains(l)) continue;
+      c.log.add(l);
+      seen.add(l);
+    }
+    if (c.log.length > 300) c.log = c.log.sublist(c.log.length - 300);
+    if (memory.trim().isNotEmpty) c.memory = memory.trim();
+    notifyListeners();
+    _save();
+  }
+
+  String applyStyle(String text) {
+    var t = text;
+    for (final r in rules) {
+      if (r.length < 2 || r[0].isEmpty) continue;
+      t = t.replaceAll(
+          RegExp('\\b${RegExp.escape(r[0])}\\b', caseSensitive: false), r[1]);
+    }
+    if (noPeriod) t = t.trim().replaceAll(RegExp(r'(?<!\.)\.$'), '');
+    if (lowercaseAll) t = t.toLowerCase();
+    return t;
+  }
+
   Future<void> _save() async {
     final p = _p;
     if (p == null) return;
@@ -201,6 +329,20 @@ class AppSettings extends ChangeNotifier {
     await p.setBool('useVision', useVision);
     await p.setBool('saveHistory', saveHistory);
     await p.setBool('hideTip', hideTip);
+    await p.setBool('useMemory', useMemory);
+    await p.setString('styleSample', styleSample);
+    await p.setBool('lowercaseAll', lowercaseAll);
+    await p.setBool('noPeriod', noPeriod);
+    await p.setString('rules', jsonEncode(rules));
+    await p.setStringList('templates', templates);
+    await p.setString(
+        'contacts', jsonEncode(contacts.map((e) => e.toJson()).toList()));
+    final ac = activeContactId;
+    if (ac == null) {
+      await p.remove('activeContactId');
+    } else {
+      await p.setString('activeContactId', ac);
+    }
     await p.setString(
         'history', jsonEncode(history.map((e) => e.toJson()).toList()));
   }
