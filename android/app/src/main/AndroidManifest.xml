@@ -46,6 +46,14 @@
             android:name=".DateAssistSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service
+            android:name=".DateRecognitionService"
+            android:exported="true"
+            android:label="Date Wingman">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

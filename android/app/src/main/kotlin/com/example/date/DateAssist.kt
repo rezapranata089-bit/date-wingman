@@ -9,10 +9,17 @@ import android.os.Looper
 import android.service.voice.VoiceInteractionService
 import android.service.voice.VoiceInteractionSession
 import android.service.voice.VoiceInteractionSessionService
+import android.speech.RecognitionService
 import java.io.File
 import java.io.FileOutputStream
 
 class DateAssistService : VoiceInteractionService()
+
+class DateRecognitionService : RecognitionService() {
+    override fun onStartListening(recognizerIntent: Intent?, listener: Callback?) {}
+    override fun onCancel(listener: Callback?) {}
+    override fun onStopListening(listener: Callback?) {}
+}
 
 class DateAssistSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession {
