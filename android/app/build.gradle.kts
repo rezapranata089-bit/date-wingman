@@ -46,6 +46,14 @@ kotlin {
     }
 }
 
+configurations.configureEach {
+    exclude(group = "com.google.mlkit", module = "text-recognition")
+}
+
+dependencies {
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+}
+
 flutter {
     source = "../.."
 }

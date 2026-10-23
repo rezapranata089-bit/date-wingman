@@ -62,7 +62,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK (release, arm64 only)
-        run: flutter build apk --release --target-platform android-arm64
+        run: flutter build apk --release --target-platform android-arm64 --split-debug-info=build/symbols --no-pub
 
       - name: Stop Gradle daemon
         if: always()
