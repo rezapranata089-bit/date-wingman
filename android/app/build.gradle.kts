@@ -42,10 +42,10 @@ android {
     signingConfigs {
         if (hasReleaseKey) {
             create("release") {
-                keyAlias = keyProps["keyAlias"] as String
-                keyPassword = keyProps["keyPassword"] as String
-                storeFile = file(keyProps["storeFile"] as String)
-                storePassword = keyProps["storePassword"] as String
+                keyAlias = (keyProps["keyAlias"] as String).trim()
+                keyPassword = (keyProps["keyPassword"] as String).trim()
+                storeFile = file((keyProps["storeFile"] as String).trim())
+                storePassword = (keyProps["storePassword"] as String).trim()
             }
         }
     }
