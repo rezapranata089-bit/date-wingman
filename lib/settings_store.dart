@@ -171,7 +171,6 @@ class AppSettings extends ChangeNotifier {
   bool lowercaseAll = false;
   bool noPeriod = false;
   List<List<String>> rules = [];
-  List<String> templates = [];
   List<Contact> contacts = [];
   String? activeContactId;
 
@@ -235,7 +234,6 @@ class AppSettings extends ChangeNotifier {
             .map((e) => (e as List).map((x) => '$x').toList())
             .toList();
       }
-      templates = p.getStringList('templates') ?? templates;
     } catch (_) {}
     final raw = p.getString('history');
     if (raw != null) {
@@ -345,7 +343,6 @@ class AppSettings extends ChangeNotifier {
     await p.setBool('lowercaseAll', lowercaseAll);
     await p.setBool('noPeriod', noPeriod);
     await p.setString('rules', jsonEncode(rules));
-    await p.setStringList('templates', templates);
     await p.setString(
         'contacts', jsonEncode(contacts.map((e) => e.toJson()).toList()));
     final ac = activeContactId;

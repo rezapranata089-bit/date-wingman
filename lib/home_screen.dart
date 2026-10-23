@@ -562,19 +562,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: Text(_error!, style: TextStyle(color: cs.error)),
                   ),
                 if (_result != null) ..._resultWidgets(context),
-                if (s.templates.isNotEmpty) ...[
-                  const SectionTitle('Balasan cepat (ketuk untuk salin)'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: s.templates
-                        .map((t) => ActionChip(
-                              label: Text(t),
-                              onPressed: () => _copy(t),
-                            ))
-                        .toList(),
-                  ),
-                ],
               ],
             ),
           ),

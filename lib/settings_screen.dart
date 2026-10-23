@@ -146,11 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     widget.settings.update(() => widget.settings.rules.add(v));
   }
 
-  Future<void> _addTemplate() async {
-    final v = await _askFields('Template baru', ['Isi template']);
-    if (v == null) return;
-    widget.settings.update(() => widget.settings.templates.add(v[0]));
-  }
+
 
   void _presetRules() {
     final s = widget.settings;
@@ -303,26 +299,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ActionChip(
                       label: const Text('Preset gaul'),
                       onPressed: _presetRules,
-                    ),
-                  ],
-                ),
-                const SectionTitle('Template balasan cepat'),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    ...List.generate(
-                      s.templates.length,
-                      (i) => InputChip(
-                        label: Text(s.templates[i]),
-                        onDeleted: () =>
-                            s.update(() => s.templates.removeAt(i)),
-                      ),
-                    ),
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 18),
-                      label: const Text('Tambah'),
-                      onPressed: _addTemplate,
                     ),
                   ],
                 ),
