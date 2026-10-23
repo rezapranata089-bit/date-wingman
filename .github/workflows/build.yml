@@ -40,14 +40,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Restore Android NDK and CMake cache
-        id: ndk-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk
-            /usr/local/lib/android/sdk/cmake
-          key: android-ndk-cmake-${{ runner.os }}-v1
+
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -78,14 +71,7 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'pubspec.lock') }}
 
-      - name: Save Android NDK and CMake cache
-        if: always() && steps.ndk-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk
-            /usr/local/lib/android/sdk/cmake
-          key: android-ndk-cmake-${{ runner.os }}-v1
+
 
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk DateWingman.apk
