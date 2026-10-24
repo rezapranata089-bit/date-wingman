@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -18,6 +20,57 @@ class OcrService {
       RegExp(r'\s*[\dgGoOlI]{1,2}[:.][\dOo]{2}\s?[APap][Mm]\b.{0,3}$');
   static final RegExp _noiseRe = RegExp(r'^(\d[A-Za-z]|[A-Za-z]\d)$');
 
+  /// True jika hasil OCR terlihat berantakan (dipakai untuk mode hybrid).
+  static bool looksBad(String t) {
+    final ls = t.split('\n').where((e) => e.trim().isNotEmpty).toList();
+    if (ls.length < 2) return true;
+    var bad = 0;
+    for (final l in ls) {
+      final b = l.replaceFirst(RegExp(r'^(Aku|Dia): '), '');
+      if (b.length < 2 || RegExp(r'\d[:.]\d{2}').hasMatch(b)) bad++;
+    }
+    return bad / ls.length > 0.3;
+  }
+
+  static double _dist(List<int> a, List<int> b) {
+    final dr = (a[0] - b[0]).toDouble();
+    final dg = (a[1] - b[1]).toDouble();
+    final db = (a[2] - b[2]).toDouble();
+    return math.sqrt(dr * dr + dg * dg + db * db);
+  }
+
+  static List<int>? _avgColor(List<List<int>?> cols, List<int> idx) {
+    if (idx.isEmpty) return null;
+    var r = 0, g = 0, b = 0;
+    for (final i in idx) {
+      final c = cols[i]!;
+      r += c[0];
+      g += c[1];
+      b += c[2];
+    }
+    return [r ~/ idx.length, g ~/ idx.length, b ~/ idx.length];
+  }
+
+  /// Warna latar bubble: sampel piksel di kiri teks (area padding bubble).
+  static List<int>? _bubbleColor(
+      ByteData? bd, int iw, int ih, double left, double cy) {
+    if (bd == null) return null;
+    final xi = (left - 12).round();
+    if (xi < 0 || xi >= iw) return null;
+    var r = 0, g = 0, b = 0, n = 0;
+    for (final dy in [-6, 0, 6]) {
+      final yi = cy.round() + dy;
+      if (yi < 0 || yi >= ih) continue;
+      final o = (yi * iw + xi) * 4;
+      r += bd.getUint8(o);
+      g += bd.getUint8(o + 1);
+      b += bd.getUint8(o + 2);
+      n++;
+    }
+    if (n == 0) return null;
+    return [r ~/ n, g ~/ n, b ~/ n];
+  }
+
   /// Membaca screenshot chat, mengembalikan teks berlabel "Dia:" / "Aku:".
   static Future<String> read(String path, {String myName = ''}) async {
     final bytes = await File(path).readAsBytes();
@@ -25,6 +78,12 @@ class OcrService {
     final frame = await codec.getNextFrame();
     final w = frame.image.width.toDouble();
     final h = frame.image.height.toDouble();
+    final iw = frame.image.width;
+    final ih = frame.image.height;
+    ByteData? bd;
+    try {
+      bd = await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    } catch (_) {}
     frame.image.dispose();
     codec.dispose();
 
@@ -85,7 +144,10 @@ class OcrService {
         groups.add([l]);
       }
 
-      final out = <String>[];
+      final texts = <String>[];
+      final lefts = <double>[];
+      final rights = <double>[];
+      final cols = <List<int>?>[];
       for (final g in groups) {
         var left = g.first.left;
         var right = g.first.right;
@@ -93,9 +155,35 @@ class OcrService {
           if (l.left < left) left = l.left;
           if (l.right > right) right = l.right;
         }
-        final mine = left > (w - right) + w * 0.04;
-        final text = g.map((e) => e.text).join(' ');
-        out.add('${mine ? 'Aku' : 'Dia'}: $text');
+        texts.add(g.map((e) => e.text).join(' '));
+        lefts.add(left);
+        rights.add(right);
+        cols.add(_bubbleColor(bd, iw, ih, left, (g.first.top + g.last.bottom) / 2));
+      }
+
+      // Referensi warna: bubble yang jelas di kiri (Dia) dan jelas di kanan (Aku).
+      final dIdx = <int>[];
+      final mIdx = <int>[];
+      for (var i = 0; i < texts.length; i++) {
+        if (cols[i] == null) continue;
+        final gapR = w - rights[i];
+        if (lefts[i] < w * 0.2 && gapR > w * 0.18) {
+          dIdx.add(i);
+        } else if (lefts[i] > w * 0.22 && gapR < w * 0.12) {
+          mIdx.add(i);
+        }
+      }
+      final rd = _avgColor(cols, dIdx);
+      final rm = _avgColor(cols, mIdx);
+      final useColor = rd != null && rm != null && _dist(rd, rm) > 40;
+
+      final out = <String>[];
+      for (var i = 0; i < texts.length; i++) {
+        final c = cols[i];
+        final mine = (useColor && c != null)
+            ? _dist(c, rm!) < _dist(c, rd!)
+            : lefts[i] > (w - rights[i]) + w * 0.04;
+        out.add('${mine ? 'Aku' : 'Dia'}: ${texts[i]}');
       }
 
       final recent = out.length > 60 ? out.sublist(out.length - 60) : out;

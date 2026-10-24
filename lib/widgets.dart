@@ -21,6 +21,37 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
+class Spark extends StatelessWidget {
+  final List<int> v;
+  const Spark(this.v, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final d = v.length > 20 ? v.sublist(v.length - 20) : v;
+    return SizedBox(
+      height: 40,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: d
+            .map((x) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: Container(
+                      height: 4 + 36 * (x.clamp(0, 100) / 100),
+                      decoration: BoxDecoration(
+                        color: x < 35 ? cs.error : cs.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
 class OptChips extends StatelessWidget {
   final List<Opt> options;
   final String selected;

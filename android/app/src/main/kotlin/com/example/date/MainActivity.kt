@@ -30,6 +30,7 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "openAssistSettings" -> result.success(openAssistSettings())
+                "setOverlay" -> result.success(setOverlay(call.argument<Boolean>("on") == true))
                 else -> result.notImplemented()
             }
         }
@@ -80,6 +81,26 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun setOverlay(on: Boolean): String {
+        if (!on) {
+            DateAssistService.instance?.hideBubble()
+            return "ok"
+        }
+        if (!Settings.canDrawOverlays(this)) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (e: Exception) {
+            }
+            return "need_permission"
+        }
+        val svc = DateAssistService.instance ?: return "need_assistant"
+        svc.showBubble()
+        return "ok"
     }
 
     private fun openAssistSettings(): Boolean {

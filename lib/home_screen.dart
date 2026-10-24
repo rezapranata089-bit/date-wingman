@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final TextEditingController _chatCtl = TextEditingController();
   final TextEditingController _extraCtl = TextEditingController();
   String? _imagePath;
+  bool _hybrid = false;
   bool _busy = false;
   String _status = '';
   String? _error;
@@ -119,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final text =
           await OcrService.read(path, myName: widget.settings.myName);
+      _hybrid = widget.settings.hybridOcr && OcrService.looksBad(text);
       if (!mounted) return;
       _chatCtl.text = text;
       final s = widget.settings;
@@ -138,8 +140,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _generate(
-      {String instruction = '', bool keepAvoid = true}) async {
+  Future<void> _generate({
+    String instruction = '',
+    bool keepAvoid = true,
+    bool forceImage = false,
+  }) async {
     final s = widget.settings;
     final chat = _chatCtl.text.trim();
     final extra = _extraCtl.text.trim();
@@ -157,7 +162,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _error = null;
     });
     try {
-      final useImage = _imagePath != null && (s.useVision || chat.isEmpty);
+      final useImage = _imagePath != null &&
+          (s.useVision || chat.isEmpty || forceImage || _hybrid);
       final res = await AiService.suggest(
         s: s,
         chat: chat,
@@ -172,7 +178,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       if (!mounted) return;
       final mc = s.memoryContact;
-      if (mc != null) s.updateContact(mc, chat: chat, memory: res.memory);
+      if (mc != null) {
+        s.updateContact(mc,
+            chat: chat, memory: res.memory, interest: res.interest);
+      }
       setState(() {
         _result = res;
         _picked.clear();
@@ -213,13 +222,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _swap() {
-    final t = _chatCtl.text.split('\n').map((l) {
-      if (l.startsWith('Dia: ')) return 'Aku: ${l.substring(5)}';
-      if (l.startsWith('Aku: ')) return 'Dia: ${l.substring(5)}';
-      return l;
-    }).join('\n');
-    setState(() => _chatCtl.text = t);
+  Future<void> _pickProfile() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (x == null) return;
+      await _discardImage();
+      if (!mounted) return;
+      setState(() {
+        _imagePath = x.path;
+        _chatCtl.clear();
+        _result = null;
+        _error = null;
+      });
+      widget.settings.update(() => widget.settings.goal = 'opener');
+      await _generate(
+        forceImage: true,
+        keepAvoid: false,
+        instruction:
+            'Gambar adalah screenshot profil dating (bio, foto, prompt). Buat 3 pesan pembuka yang spesifik dan menyinggung detail nyata dari profilnya, bukan basa-basi.',
+      );
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Gagal membuka galeri: $e');
+    }
   }
 
   Future<void> _clear() async {
@@ -235,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _copy(String t) async {
     await Clipboard.setData(ClipboardData(text: t));
+    widget.settings.addGood(t);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Disalin'), duration: Duration(seconds: 1)),
@@ -322,6 +347,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             Text('Catatan: ${c.notes}'),
           ],
+          if (c.scores.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Minat Dia: ${c.scores.last}/100'),
+            const SizedBox(height: 4),
+            Spark(c.scores),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -336,6 +367,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onPressed: () => s.update(() {
                   c.memory = '';
                   c.log.clear();
+                  c.scores.clear();
                 }),
                 icon: const Icon(Icons.restart_alt, size: 18),
                 label: const Text('Reset memori'),
@@ -521,9 +553,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       label: const Text('Screenshot'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _swap,
-                      icon: const Icon(Icons.swap_horiz, size: 18),
-                      label: const Text('Tukar Aku/Dia'),
+                      onPressed: _busy ? null : _pickProfile,
+                      icon: const Icon(Icons.badge_outlined, size: 18),
+                      label: const Text('Profil'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _clear,
@@ -590,7 +622,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Widget> _resultWidgets(BuildContext context) {
     final r = _result!;
     final cs = Theme.of(context).colorScheme;
-    final note = [r.analysis, r.tip].where((e) => e.isNotEmpty).join('\n\n');
+    final note = [
+      r.analysis,
+      r.tip,
+      if (r.interest >= 0) 'Minat Dia: ${r.interest}/100',
+      if (r.timing.isNotEmpty) 'Waktu balas: ${r.timing}',
+      if (r.flag.isNotEmpty) 'Waspada: ${r.flag}',
+    ].where((e) => e.isNotEmpty).join('\n\n');
     return [
       const SectionTitle('Saran balasan'),
       if (note.isNotEmpty)
@@ -651,6 +689,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 }),
                       ),
                       const Spacer(),
+                      IconButton(
+                        tooltip: 'Kurang natural',
+                        icon: const Icon(Icons.thumb_down_outlined, size: 18),
+                        onPressed: () {
+                          widget.settings.addBad(e.text);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Dicatat, gaya ini dihindari'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                      ),
                       TextButton.icon(
                         onPressed: () => _copy(e.text),
                         icon: const Icon(Icons.copy, size: 16),

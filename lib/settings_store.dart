@@ -30,6 +30,8 @@ const List<Opt> kTones = [
 const List<Opt> kGoals = [
   Opt('lanjut', 'Lanjutkan obrolan',
       'menjaga obrolan tetap hidup dan menarik, menanggapi lalu menambah pertanyaan atau topik'),
+  Opt('hidupkan', 'Hidupkan chat',
+      'menghidupkan chat yang mulai sepi: sambung ke topik atau detail yang pernah Dia sebut (lihat memori dan riwayat) atau munculkan topik baru yang relevan, tanpa terkesan memaksa dan tanpa menanyakan "kok diam"'),
   Opt('opener', 'Pesan pembuka',
       'membuka obrolan pertama yang menarik dan tidak klise berdasarkan info profil atau konteks'),
   Opt('ajak', 'Ajak ketemu',
@@ -104,6 +106,7 @@ class Contact {
   String notes;
   String memory;
   List<String> log;
+  List<int> scores;
 
   Contact({
     required this.id,
@@ -111,7 +114,9 @@ class Contact {
     this.notes = '',
     this.memory = '',
     List<String>? log,
-  }) : log = log ?? [];
+    List<int>? scores,
+  })  : log = log ?? [],
+        scores = scores ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -119,6 +124,7 @@ class Contact {
         'notes': notes,
         'memory': memory,
         'log': log,
+        'scores': scores,
       };
 
   factory Contact.fromJson(Map<String, dynamic> j) => Contact(
@@ -127,21 +133,11 @@ class Contact {
         notes: '${j['notes'] ?? ''}',
         memory: '${j['memory'] ?? ''}',
         log: ((j['log'] as List?) ?? []).map((e) => '$e').toList(),
+        scores: ((j['scores'] as List?) ?? [])
+            .map((e) => int.tryParse('$e') ?? 0)
+            .toList(),
       );
 }
-
-const List<List<String>> kPresetRules = [
-  ['kamu', 'kmu'],
-  ['tidak', 'gak'],
-  ['nggak', 'gak'],
-  ['sudah', 'udah'],
-  ['yang', 'yg'],
-  ['dengan', 'dgn'],
-  ['kalau', 'kalo'],
-  ['bagaimana', 'gimana'],
-  ['terima kasih', 'makasih'],
-  ['sama-sama', 'sm2'],
-];
 
 class AppSettings extends ChangeNotifier {
   SharedPreferences? _p;
@@ -160,6 +156,13 @@ class AppSettings extends ChangeNotifier {
   bool useEmoji = true;
   String aboutMe = '';
   String myName = '';
+  bool overlayOn = false;
+  bool autoStyle = true;
+  bool humanize = true;
+  bool mirror = true;
+  bool hybridOcr = true;
+  List<String> good = [];
+  List<String> bad = [];
 
   bool autoGenerate = true;
   bool useVision = false;
@@ -213,6 +216,19 @@ class AppSettings extends ChangeNotifier {
     useEmoji = p.getBool('useEmoji') ?? useEmoji;
     aboutMe = p.getString('aboutMe') ?? aboutMe;
     myName = p.getString('myName') ?? myName;
+    overlayOn = p.getBool('overlayOn') ?? overlayOn;
+    autoStyle = p.getBool('autoStyle') ?? autoStyle;
+    humanize = p.getBool('humanize') ?? humanize;
+    mirror = p.getBool('mirror') ?? mirror;
+    hybridOcr = p.getBool('hybridOcr') ?? hybridOcr;
+    try {
+      good = (jsonDecode(p.getString('good') ?? '[]') as List)
+          .map((e) => '$e')
+          .toList();
+      bad = (jsonDecode(p.getString('bad') ?? '[]') as List)
+          .map((e) => '$e')
+          .toList();
+    } catch (_) {}
     autoGenerate = p.getBool('autoGenerate') ?? autoGenerate;
     useVision = p.getBool('useVision') ?? useVision;
     saveHistory = p.getBool('saveHistory') ?? saveHistory;
@@ -275,6 +291,28 @@ class AppSettings extends ChangeNotifier {
     _save();
   }
 
+  void addGood(String t) {
+    final x = t.trim();
+    if (x.isEmpty) return;
+    good.remove(x);
+    good.insert(0, x);
+    if (good.length > 15) good = good.sublist(0, 15);
+    bad.remove(x);
+    notifyListeners();
+    _save();
+  }
+
+  void addBad(String t) {
+    final x = t.trim();
+    if (x.isEmpty) return;
+    bad.remove(x);
+    bad.insert(0, x);
+    if (bad.length > 15) bad = bad.sublist(0, 15);
+    good.remove(x);
+    notifyListeners();
+    _save();
+  }
+
   void addContact(String name, String notes) {
     final c = Contact(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -294,7 +332,8 @@ class AppSettings extends ChangeNotifier {
     _save();
   }
 
-  void updateContact(Contact c, {String chat = '', String memory = ''}) {
+  void updateContact(Contact c,
+      {String chat = '', String memory = '', int interest = -1}) {
     final seen = c.log.toSet();
     for (final raw in chat.split('\n')) {
       final l = raw.trim();
@@ -304,6 +343,12 @@ class AppSettings extends ChangeNotifier {
     }
     if (c.log.length > 300) c.log = c.log.sublist(c.log.length - 300);
     if (memory.trim().isNotEmpty) c.memory = memory.trim();
+    if (interest >= 0) {
+      c.scores.add(interest);
+      if (c.scores.length > 30) {
+        c.scores = c.scores.sublist(c.scores.length - 30);
+      }
+    }
     notifyListeners();
     _save();
   }
@@ -336,6 +381,13 @@ class AppSettings extends ChangeNotifier {
     await p.setBool('useEmoji', useEmoji);
     await p.setString('aboutMe', aboutMe);
     await p.setString('myName', myName);
+    await p.setBool('overlayOn', overlayOn);
+    await p.setBool('autoStyle', autoStyle);
+    await p.setBool('humanize', humanize);
+    await p.setBool('mirror', mirror);
+    await p.setBool('hybridOcr', hybridOcr);
+    await p.setString('good', jsonEncode(good));
+    await p.setString('bad', jsonEncode(bad));
     await p.setBool('autoGenerate', autoGenerate);
     await p.setBool('useVision', useVision);
     await p.setBool('saveHistory', saveHistory);

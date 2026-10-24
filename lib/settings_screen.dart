@@ -151,13 +151,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 
 
-  void _presetRules() {
+  Future<void> _toggleOverlay(bool v) async {
     final s = widget.settings;
-    s.update(() {
-      for (final r in kPresetRules) {
-        if (!s.rules.any((x) => x[0] == r[0])) s.rules.add([r[0], r[1]]);
-      }
-    });
+    var r = 'ok';
+    try {
+      r = await _ch.invokeMethod<String>('setOverlay', {'on': v}) ?? 'ok';
+    } catch (_) {
+      r = 'error';
+    }
+    if (!mounted) return;
+    s.update(() => s.overlayOn = v && r == 'ok');
+    String? msg;
+    if (v && r == 'need_permission') {
+      msg =
+          'Izinkan "Tampil di atas aplikasi lain" untuk Date Wingman, lalu aktifkan lagi.';
+    } else if (v && r == 'need_assistant') {
+      msg =
+          'Jadikan Date Wingman asisten digital dulu (tombol di bawah), lalu aktifkan lagi.';
+    } else if (v && r == 'error') {
+      msg = 'Overlay gagal diaktifkan.';
+    }
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   Future<void> _openAssist() async {
@@ -310,10 +326,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: const Text('Tambah'),
                       onPressed: _addRule,
                     ),
-                    ActionChip(
-                      label: const Text('Preset gaul'),
-                      onPressed: _presetRules,
-                    ),
                   ],
                 ),
                 const SectionTitle('Preferensi default'),
@@ -337,6 +349,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Pakai emoji'),
                   value: s.useEmoji,
                   onChanged: (v) => s.update(() => s.useEmoji = v),
+                ),
+                const SectionTitle('Overlay & kualitas balasan'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Overlay melayang'),
+                  subtitle: const Text(
+                      'Bubble di atas aplikasi lain. Ketuk untuk baca layar dan buat balasan. Butuh izin tampil di atas aplikasi lain dan Date Wingman sebagai asisten digital'),
+                  value: s.overlayOn,
+                  onChanged: _toggleOverlay,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Tiru gayaku otomatis'),
+                  subtitle: const Text(
+                      'Pakai pesan "Aku" dari chat dan riwayat sebagai contoh gaya'),
+                  value: s.autoStyle,
+                  onChanged: (v) => s.update(() => s.autoStyle = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Humanizer lokal'),
+                  subtitle: const Text(
+                      'Bersihkan pola khas AI (tanda pisah, seru berlebihan) setelah balasan jadi'),
+                  value: s.humanize,
+                  onChanged: (v) => s.update(() => s.humanize = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Mode cermin'),
+                  subtitle: const Text(
+                      'Samakan panjang, tawa, dan kebiasaan huruf dengan Dia'),
+                  value: s.mirror,
+                  onChanged: (v) => s.update(() => s.mirror = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('OCR hybrid'),
+                  subtitle: const Text(
+                      'Kirim gambar ke AI otomatis jika hasil OCR terlihat berantakan'),
+                  value: s.hybridOcr,
+                  onChanged: (v) => s.update(() => s.hybridOcr = v),
                 ),
                 const SectionTitle('Perilaku'),
                 SwitchListTile(

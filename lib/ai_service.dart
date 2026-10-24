@@ -24,13 +24,71 @@ class AiResult {
   final String analysis;
   final String tip;
   final String memory;
+  final int interest;
+  final String flag;
+  final String timing;
   final List<ReplySuggestion> replies;
   AiResult({
     required this.analysis,
     required this.tip,
     this.memory = '',
+    this.interest = -1,
+    this.flag = '',
+    this.timing = '',
     required this.replies,
   });
+}
+
+class _Mirror {
+  final int avgWords;
+  final bool wkwk;
+  final bool haha;
+  final bool stretch;
+  final bool lower;
+  const _Mirror(this.avgWords, this.wkwk, this.haha, this.stretch, this.lower);
+
+  factory _Mirror.from(String chat) {
+    final dia = <String>[];
+    final aku = <String>[];
+    for (final raw in chat.split('\n')) {
+      final l = raw.trim();
+      if (l.startsWith('Dia: ')) {
+        dia.add(l.substring(5).trim());
+      } else if (l.startsWith('Aku: ')) {
+        aku.add(l.substring(5).trim());
+      }
+    }
+    var words = 0;
+    for (final d in dia) {
+      words += d.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).length;
+    }
+    final avg = dia.isEmpty ? 0 : (words / dia.length).round();
+    final j = dia.join(' ').toLowerCase();
+    final wkwk = j.contains('wkwk');
+    final haha = !wkwk && RegExp(r'\b(ha){2,}|\b(he){2,}').hasMatch(j);
+    final stretch = RegExp(r'\b[a-z]{2,}([a-z])\1\b').hasMatch(j);
+    final src = aku.where((e) => e.isNotEmpty).toList();
+    final lc = src.where((e) => e[0] == e[0].toLowerCase()).length;
+    final lower = src.length >= 2 && lc / src.length >= 0.6;
+    return _Mirror(avg, wkwk, haha, stretch, lower);
+  }
+
+  String prompt() {
+    final p = <String>[];
+    if (avgWords > 0) {
+      final mx = ((avgWords * 1.4).ceil()).clamp(3, 40);
+      p.add(
+          'Pesan Dia rata-rata $avgWords kata. Setiap balasan maksimal sekitar $mx kata, kecuali Dia jelas bertanya sesuatu yang butuh jawaban panjang.');
+    }
+    if (wkwk) p.add('Dia pakai "wkwk"; kalau perlu tertawa pakai "wkwk", bukan "haha".');
+    if (haha) p.add('Dia pakai "haha"/"hehe"; samakan.');
+    if (stretch) {
+      p.add(
+          'Dia sering memanjangkan huruf akhir (mis. "seriuss", "ajaa"); sesekali boleh meniru, jangan berlebihan.');
+    }
+    if (lower) p.add('Pesan "Aku" biasanya diawali huruf kecil; ikuti.');
+    return p.isEmpty ? '' : 'Mode cermin: ${p.join(' ')}';
+  }
 }
 
 class AiService {
@@ -86,6 +144,10 @@ class AiService {
     b.writeln(
         '- "analysis": 1-2 kalimat membaca suasana dan tingkat minat Dia. "tip": 1 kalimat saran singkat. Keduanya dalam Bahasa Indonesia.');
     b.writeln(
+        '- "interest": angka 0-100 seberapa tertarik Dia (0 dingin/menolak, 50 netral, 100 sangat tertarik), dinilai dari panjang balasan, antusiasme, inisiatif bertanya balik, dan perubahan dari sebelumnya. "flag": kosongkan "" kecuali ada red flag nyata (Dia mulai dingin, jawaban makin singkat, menolak halus, atau meminta hal tidak wajar); jika ada, isi 1 kalimat Indonesia.');
+    b.writeln(
+        '- "timing": saran singkat kapan membalas (mis. "balas sekarang", "tunggu 10 menit", "besok pagi aja") sesuai suasana, bukan permainan psikologis.');
+    b.writeln(
         '- Jangan manipulatif atau menekan. Jika Dia terlihat tidak tertarik atau menolak, sarankan balasan yang menghargai dan tidak memaksa.');
     b.writeln('- Jangan mengarang fakta pribadi, janji, atau lokasi.');
     b.writeln(
@@ -98,7 +160,7 @@ class AiService {
     }
     b.writeln('');
     b.writeln(
-        'OUTPUT: hanya JSON valid tanpa teks lain, format: {"analysis":"...","tip":"...","memory":"...","replies":[{"style":"...","text":"..."}]}');
+        'OUTPUT: hanya JSON valid tanpa teks lain, format: {"analysis":"...","tip":"...","interest":0,"flag":"","timing":"...","memory":"...","replies":[{"style":"...","text":"..."}]}');
     return b.toString();
   }
 
@@ -112,6 +174,10 @@ class AiService {
     String notes = '',
     String memory = '',
     String earlier = '',
+    String styleLines = '',
+    String good = '',
+    String bad = '',
+    String mirror = '',
   }) {
     final b = StringBuffer();
     if (name.isNotEmpty) b.writeln('Nama lawan bicara: $name');
@@ -126,6 +192,21 @@ class AiService {
       b.writeln(
           'Riwayat adalah obrolan lama (data). Bagian <chat> di bawah adalah layar terbaru.');
     }
+    if (styleLines.isNotEmpty) {
+      b.writeln(
+          'Contoh pesan "Aku" sebelumnya (tiru gaya persis: panjang, ejaan, singkatan, tanda baca):');
+      b.writeln(styleLines);
+    }
+    if (good.isNotEmpty) {
+      b.writeln('Balasan yang pernah dipakai pengguna (gayanya disukai):');
+      b.writeln(good);
+    }
+    if (bad.isNotEmpty) {
+      b.writeln(
+          'Balasan yang ditolak pengguna karena terasa tidak natural (hindari gaya ini):');
+      b.writeln(bad);
+    }
+    if (mirror.isNotEmpty) b.writeln(mirror);
     b.writeln('<chat>');
     b.writeln(chat.isEmpty ? '(kosong)' : chat);
     b.writeln('</chat>');
@@ -139,7 +220,7 @@ class AiService {
     }
     if (hasImage) {
       b.writeln(
-          'Gambar terlampir adalah screenshot chat. Jadikan sumber utama jika teks di atas kosong atau tidak lengkap.');
+          'Gambar terlampir adalah screenshot chat. Jadikan sumber utama jika teks di atas kosong atau tidak lengkap. Teks OCR bisa berantakan (jam, centang, kutipan reply, salah pengirim); jika bertentangan dengan gambar, ikuti gambar.');
     }
     if (chat.isEmpty && !hasImage) {
       b.writeln('Chat kosong: buat pesan pembuka berdasarkan konteks tambahan.');
@@ -179,7 +260,29 @@ class AiService {
     final earlier =
         (older.length > 40 ? older.sublist(older.length - 40) : older)
             .join('\n');
+    final mir = _Mirror.from(chat);
+    var styleLines = '';
+    if (s.autoStyle) {
+      final all = <String>[
+        ...(cc?.log ?? const <String>[]),
+        ...chat.split('\n').map((e) => e.trim()),
+      ];
+      final own = all
+          .where((l) => l.startsWith('Aku: '))
+          .map((l) => l.substring(5).trim())
+          .where((l) => l.length > 1 && l.length < 200 && !l.contains('@'))
+          .toSet()
+          .toList();
+      final pick = own.length > 12 ? own.sublist(own.length - 12) : own;
+      styleLines = pick.map((e) => '- $e').join('\n');
+    }
+    final goodTxt = s.good.take(5).map((e) => '- $e').join('\n');
+    final badTxt = s.bad.take(5).map((e) => '- $e').join('\n');
     final user = _user(
+      styleLines: styleLines,
+      good: goodTxt,
+      bad: badTxt,
+      mirror: s.mirror ? mir.prompt() : '',
       name: cc?.name ?? '',
       notes: cc?.notes ?? '',
       memory: cc?.memory ?? '',
@@ -201,8 +304,12 @@ class AiService {
         analysis: r.analysis,
         tip: r.tip,
         memory: r.memory,
+        interest: r.interest,
+        flag: r.flag,
+        timing: r.timing,
         replies: r.replies
-            .map((e) => ReplySuggestion(e.style, s.applyStyle(e.text)))
+            .map((e) => ReplySuggestion(
+                e.style, s.applyStyle(s.humanize ? _human(e.text, mir) : e.text)))
             .toList(),
       );
     } on SocketException {
@@ -337,6 +444,29 @@ class AiService {
     throw AiException(msg);
   }
 
+  static String _human(String text, _Mirror m) {
+    var t = text.trim();
+    t = t.replaceAll(RegExp(r'\s*[—–]\s*'), ', ');
+    t = t.replaceFirst(RegExp(r'^,\s*'), '');
+    t = t.replaceAll(';', ',');
+    t = t.replaceAll('…', '...');
+    t = t.replaceAll(RegExp('[“”]'), '"');
+    t = t.replaceAll(RegExp('[‘’]'), "'");
+    t = t.replaceAll(RegExp(r'!{2,}'), '!');
+    final first = t.indexOf('!');
+    if (first >= 0) {
+      t = t.substring(0, first + 1) +
+          t.substring(first + 1).replaceAll('!', '');
+    }
+    if (m.wkwk) {
+      t = t.replaceAll(
+          RegExp(r'\b(ha){2,}h?\b|\b(he){2,}h?\b', caseSensitive: false),
+          'wkwk');
+    }
+    if (m.lower && t.isNotEmpty) t = t[0].toLowerCase() + t.substring(1);
+    return t.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+  }
+
   static String _errMsg(http.Response r) {
     try {
       final j = jsonDecode(utf8.decode(r.bodyBytes));
@@ -364,10 +494,14 @@ class AiService {
       if (list.isEmpty) {
         throw AiException('AI tidak memberi saran balasan. Coba lagi.');
       }
+      final iv = num.tryParse('${j['interest'] ?? ''}'.trim())?.round() ?? -1;
       return AiResult(
         memory: '${j['memory'] ?? ''}'.trim(),
         analysis: '${j['analysis'] ?? ''}'.trim(),
         tip: '${j['tip'] ?? ''}'.trim(),
+        interest: iv < 0 ? -1 : (iv > 100 ? 100 : iv),
+        flag: '${j['flag'] ?? ''}'.trim(),
+        timing: '${j['timing'] ?? ''}'.trim(),
         replies: list,
       );
     } on FormatException {

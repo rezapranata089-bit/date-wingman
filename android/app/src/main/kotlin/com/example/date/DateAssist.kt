@@ -3,7 +3,18 @@ package com.example.date
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.TextView
 import android.os.Handler
 import android.os.Looper
 import android.service.voice.VoiceInteractionService
@@ -13,7 +24,125 @@ import android.speech.RecognitionService
 import java.io.File
 import java.io.FileOutputStream
 
-class DateAssistService : VoiceInteractionService()
+class DateAssistService : VoiceInteractionService() {
+    companion object {
+        @Volatile
+        var instance: DateAssistService? = null
+    }
+
+    private var bubble: View? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onReady() {
+        super.onReady()
+        instance = this
+        val on = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            .getBoolean("flutter.overlayOn", false)
+        if (on) showBubble()
+    }
+
+    override fun onShutdown() {
+        hideBubble()
+        instance = null
+        super.onShutdown()
+    }
+
+    @Suppress("DEPRECATION")
+    fun showBubble() {
+        if (bubble != null) return
+        if (!Settings.canDrawOverlays(this)) return
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val density = resources.displayMetrics.density
+            val size = (56 * density).toInt()
+            val v = TextView(this)
+            v.text = "✨"
+            v.gravity = Gravity.CENTER
+            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            val bg = GradientDrawable()
+            bg.shape = GradientDrawable.OVAL
+            bg.setColor(Color.parseColor("#E91E63"))
+            v.background = bg
+            v.alpha = 0.9f
+            val type = if (Build.VERSION.SDK_INT >= 26) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+            val lp = WindowManager.LayoutParams(
+                size, size, type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
+            lp.gravity = Gravity.TOP or Gravity.START
+            lp.x = 0
+            lp.y = (200 * density).toInt()
+            v.setOnTouchListener(object : View.OnTouchListener {
+                var sx = 0
+                var sy = 0
+                var tx = 0f
+                var ty = 0f
+                var moved = false
+                override fun onTouch(view: View, e: MotionEvent): Boolean {
+                    when (e.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            sx = lp.x
+                            sy = lp.y
+                            tx = e.rawX
+                            ty = e.rawY
+                            moved = false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = (e.rawX - tx).toInt()
+                            val dy = (e.rawY - ty).toInt()
+                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true
+                            if (moved) {
+                                lp.x = sx + dx
+                                lp.y = sy + dy
+                                try {
+                                    wm.updateViewLayout(view, lp)
+                                } catch (ex: Exception) {
+                                }
+                            }
+                        }
+                        MotionEvent.ACTION_UP -> if (!moved) trigger()
+                    }
+                    return true
+                }
+            })
+            wm.addView(v, lp)
+            bubble = v
+        } catch (e: Exception) {
+            bubble = null
+        }
+    }
+
+    fun hideBubble() {
+        val v = bubble ?: return
+        try {
+            (getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(v)
+        } catch (e: Exception) {
+        }
+        bubble = null
+    }
+
+    private fun trigger() {
+        val v = bubble ?: return
+        v.visibility = View.INVISIBLE
+        mainHandler.postDelayed({
+            try {
+                showSession(
+                    Bundle(),
+                    VoiceInteractionSession.SHOW_WITH_ASSIST or
+                        VoiceInteractionSession.SHOW_WITH_SCREENSHOT
+                )
+            } catch (e: Exception) {
+            }
+        }, 200)
+        mainHandler.postDelayed({ bubble?.visibility = View.VISIBLE }, 3500)
+    }
+}
 
 class DateRecognitionService : RecognitionService() {
     override fun onStartListening(recognizerIntent: Intent?, listener: Callback?) {}
