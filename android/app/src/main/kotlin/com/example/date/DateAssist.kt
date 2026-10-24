@@ -1,5 +1,6 @@
 package com.example.date
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -53,17 +54,22 @@ class DateAssistService : VoiceInteractionService() {
         if (!Settings.canDrawOverlays(this)) return
         try {
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val density = resources.displayMetrics.density
-            val size = (56 * density).toInt()
+            val dm = resources.displayMetrics
+            val density = dm.density
+            val size = (46 * density).toInt()
             val v = TextView(this)
-            v.text = "✨"
+            v.text = "✦"
             v.gravity = Gravity.CENTER
-            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-            val bg = GradientDrawable()
+            v.setTextColor(Color.WHITE)
+            v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            val bg = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.parseColor("#FF4081"), Color.parseColor("#7C4DFF"))
+            )
             bg.shape = GradientDrawable.OVAL
-            bg.setColor(Color.parseColor("#E91E63"))
+            bg.setStroke((2 * density).toInt(), Color.argb(200, 255, 255, 255))
             v.background = bg
-            v.alpha = 0.9f
+            v.alpha = 0.8f
             val type = if (Build.VERSION.SDK_INT >= 26) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -76,7 +82,7 @@ class DateAssistService : VoiceInteractionService() {
                 PixelFormat.TRANSLUCENT
             )
             lp.gravity = Gravity.TOP or Gravity.START
-            lp.x = 0
+            lp.x = -size / 3
             lp.y = (200 * density).toInt()
             v.setOnTouchListener(object : View.OnTouchListener {
                 var sx = 0
@@ -84,6 +90,14 @@ class DateAssistService : VoiceInteractionService() {
                 var tx = 0f
                 var ty = 0f
                 var moved = false
+                var longDone = false
+                val longRun = Runnable {
+                    longDone = true
+                    getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        .edit().putBoolean("flutter.overlayOn", false).apply()
+                    hideBubble()
+                }
+
                 override fun onTouch(view: View, e: MotionEvent): Boolean {
                     when (e.action) {
                         MotionEvent.ACTION_DOWN -> {
@@ -92,11 +106,17 @@ class DateAssistService : VoiceInteractionService() {
                             tx = e.rawX
                             ty = e.rawY
                             moved = false
+                            longDone = false
+                            view.alpha = 1f
+                            mainHandler.postDelayed(longRun, 700)
                         }
                         MotionEvent.ACTION_MOVE -> {
                             val dx = (e.rawX - tx).toInt()
                             val dy = (e.rawY - ty).toInt()
-                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true
+                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                                moved = true
+                                mainHandler.removeCallbacks(longRun)
+                            }
                             if (moved) {
                                 lp.x = sx + dx
                                 lp.y = sy + dy
@@ -106,7 +126,30 @@ class DateAssistService : VoiceInteractionService() {
                                 }
                             }
                         }
-                        MotionEvent.ACTION_UP -> if (!moved) trigger()
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            mainHandler.removeCallbacks(longRun)
+                            if (longDone) return true
+                            view.alpha = 0.8f
+                            if (moved) {
+                                val edge = if (e.rawX < dm.widthPixels / 2) {
+                                    -size / 3
+                                } else {
+                                    dm.widthPixels - size * 2 / 3
+                                }
+                                val a = ValueAnimator.ofInt(lp.x, edge)
+                                a.duration = 160
+                                a.addUpdateListener {
+                                    lp.x = it.animatedValue as Int
+                                    try {
+                                        wm.updateViewLayout(view, lp)
+                                    } catch (ex: Exception) {
+                                    }
+                                }
+                                a.start()
+                            } else if (e.action == MotionEvent.ACTION_UP) {
+                                trigger()
+                            }
+                        }
                     }
                     return true
                 }

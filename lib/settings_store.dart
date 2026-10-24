@@ -291,6 +291,17 @@ class AppSettings extends ChangeNotifier {
     _save();
   }
 
+  Future<void> syncOverlay() async {
+    final p = _p;
+    if (p == null) return;
+    await p.reload();
+    final v = p.getBool('overlayOn') ?? false;
+    if (v != overlayOn) {
+      overlayOn = v;
+      notifyListeners();
+    }
+  }
+
   void addGood(String t) {
     final x = t.trim();
     if (x.isEmpty) return;

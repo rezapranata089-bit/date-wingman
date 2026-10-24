@@ -37,6 +37,18 @@ class MainActivity : FlutterActivity() {
         handleIntent(intent, false)
     }
 
+    override fun onResume() {
+        super.onResume()
+        DateAssistService.instance?.hideBubble()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        val on = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+            .getBoolean("flutter.overlayOn", false)
+        if (on) DateAssistService.instance?.showBubble()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent, true)
@@ -98,8 +110,7 @@ class MainActivity : FlutterActivity() {
             }
             return "need_permission"
         }
-        val svc = DateAssistService.instance ?: return "need_assistant"
-        svc.showBubble()
+        DateAssistService.instance ?: return "need_assistant"
         return "ok"
     }
 

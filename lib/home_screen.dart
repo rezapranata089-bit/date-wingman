@@ -71,7 +71,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _checkPending();
+    if (state == AppLifecycleState.resumed) {
+      _checkPending();
+      widget.settings.syncOverlay();
+    }
   }
 
   Future<void> _checkPending() async {
