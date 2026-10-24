@@ -180,6 +180,7 @@ class AiService {
     String good = '',
     String bad = '',
     String mirror = '',
+    String pinned = '',
   }) {
     final b = StringBuffer();
     final nw = DateTime.now();
@@ -187,6 +188,10 @@ class AiService {
         'Waktu sekarang: ${nw.hour.toString().padLeft(2, '0')}:${nw.minute.toString().padLeft(2, '0')}');
     if (name.isNotEmpty) b.writeln('Nama lawan bicara: $name');
     if (notes.isNotEmpty) b.writeln('Catatan pengguna tentang Dia: $notes');
+    if (pinned.isNotEmpty) {
+      b.writeln(
+          'Fakta pasti tentang Dia dari pengguna (prioritas tertinggi, jangan dibantah): $pinned');
+    }
     if (memory.isNotEmpty) {
       b.writeln('Memori tentang Dia dari obrolan sebelumnya: $memory');
     }
@@ -292,6 +297,7 @@ class AiService {
       name: cc?.name ?? '',
       notes: cc?.notes ?? '',
       memory: cc?.memory ?? '',
+      pinned: cc?.pinned ?? '',
       earlier: earlier,
       chat: chat,
       extra: extra,

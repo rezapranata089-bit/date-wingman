@@ -331,6 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _editMemory(Contact c) async {
+    final pinCtl = TextEditingController(text: c.pinned);
     final memCtl = TextEditingController(text: c.memory);
     final logCtl = TextEditingController(text: c.log.join('\n'));
     final ok = await showDialog<bool>(
@@ -342,11 +343,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
+                controller: pinCtl,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Memori tetap (tidak ditimpa AI)',
+                  hintText: 'Contoh: namanya Rina, kuliah di Makassar, alergi seafood',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: memCtl,
                 minLines: 4,
                 maxLines: 8,
                 decoration: const InputDecoration(
-                  labelText: 'Ringkasan memori',
+                  labelText: 'Ringkasan AI (bisa diperbarui AI)',
                   hintText: 'Nama, minat, rencana, topik yang sudah dibahas',
                   border: OutlineInputBorder(),
                 ),
@@ -382,6 +394,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .where((e) => e.isNotEmpty)
         .toList();
     widget.settings.update(() {
+      final kept = lines.toSet();
+      for (final old in c.log) {
+        if (!kept.contains(old) && !c.removed.contains(old)) {
+          c.removed.add(old);
+        }
+      }
+      c.removed.removeWhere(kept.contains);
+      if (c.removed.length > 200) {
+        c.removed = c.removed.sublist(c.removed.length - 200);
+      }
+      c.pinned = pinCtl.text.trim();
       c.memory = memCtl.text.trim();
       c.log = lines.length > 300 ? lines.sublist(lines.length - 300) : lines;
     });
@@ -400,6 +423,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (c.pinned.isNotEmpty) ...[
+            Text('Memori tetap: ${c.pinned}'),
+            const SizedBox(height: 8),
+          ],
           Text(c.memory.isEmpty
               ? 'Belum ada ringkasan. Terisi otomatis setelah balasan dibuat.'
               : c.memory),

@@ -107,6 +107,8 @@ class Contact {
   String memory;
   List<String> log;
   List<int> scores;
+  String pinned;
+  List<String> removed;
 
   Contact({
     required this.id,
@@ -115,8 +117,11 @@ class Contact {
     this.memory = '',
     List<String>? log,
     List<int>? scores,
+    this.pinned = '',
+    List<String>? removed,
   })  : log = log ?? [],
-        scores = scores ?? [];
+        scores = scores ?? [],
+        removed = removed ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -125,6 +130,8 @@ class Contact {
         'memory': memory,
         'log': log,
         'scores': scores,
+        'pinned': pinned,
+        'removed': removed,
       };
 
   factory Contact.fromJson(Map<String, dynamic> j) => Contact(
@@ -136,6 +143,8 @@ class Contact {
         scores: ((j['scores'] as List?) ?? [])
             .map((e) => int.tryParse('$e') ?? 0)
             .toList(),
+        pinned: '${j['pinned'] ?? ''}',
+        removed: ((j['removed'] as List?) ?? []).map((e) => '$e').toList(),
       );
 }
 
@@ -348,7 +357,7 @@ class AppSettings extends ChangeNotifier {
     final seen = c.log.toSet();
     for (final raw in chat.split('\n')) {
       final l = raw.trim();
-      if (l.isEmpty || seen.contains(l)) continue;
+      if (l.isEmpty || seen.contains(l) || c.removed.contains(l)) continue;
       c.log.add(l);
       seen.add(l);
     }
