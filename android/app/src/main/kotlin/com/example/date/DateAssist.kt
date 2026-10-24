@@ -139,7 +139,7 @@ class DateAssistService : VoiceInteractionService() {
                 )
             } catch (e: Exception) {
             }
-        }, 200)
+        }, 500)
         mainHandler.postDelayed({ bubble?.visibility = View.VISIBLE }, 3500)
     }
 }

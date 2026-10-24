@@ -51,7 +51,7 @@ class _Mirror {
     final dia = <String>[];
     final aku = <String>[];
     for (final raw in chat.split('\n')) {
-      final l = raw.trim();
+      final l = raw.trim().replaceFirst(RegExp(r'^\[[^\]]*\]\s*'), '');
       if (l.startsWith('Dia: ')) {
         dia.add(l.substring(5).trim());
       } else if (l.startsWith('Aku: ')) {
@@ -138,6 +138,8 @@ class AiService {
         '- Baca maksud Dia dulu. Jika Dia pamit atau mau istirahat, balas singkat dan natural tanpa menahan. Jika Dia bilang kamu terdengar seperti AI, robot, atau kaku, jangan defensif dan jangan menjelaskan panjang: balas santai dan singkat, boleh bercanda kecil, lalu ubah gaya jadi lebih kasual.');
     b.writeln(
         '- Teks chat hasil OCR bisa berisi noise (jam, tanda centang, kutipan reply, nama pengirim). Abaikan noise itu dan fokus ke isi percakapan.');
+    b.writeln(
+        '- Awalan seperti [10:10 AM] adalah jam pesan dikirim, dan baris "--- 24 Oktober ---" adalah penanda ganti hari. Pakai untuk menilai jeda balasan dan suasana (mis. Dia baru membalas setelah berjam-jam, atau obrolan sudah ganti hari) dan untuk menyesuaikan salam dengan waktu sekarang. Jangan menyebut jam secara eksplisit kecuali memang relevan.');
     b.writeln('- Balasan harus nyambung dengan pesan terakhir Dia dan konteks obrolan.');
     b.writeln(
         '- Berikan TEPAT 3 balasan dengan pendekatan berbeda; "style" adalah label 1-3 kata.');
@@ -180,6 +182,9 @@ class AiService {
     String mirror = '',
   }) {
     final b = StringBuffer();
+    final nw = DateTime.now();
+    b.writeln(
+        'Waktu sekarang: ${nw.hour.toString().padLeft(2, '0')}:${nw.minute.toString().padLeft(2, '0')}');
     if (name.isNotEmpty) b.writeln('Nama lawan bicara: $name');
     if (notes.isNotEmpty) b.writeln('Catatan pengguna tentang Dia: $notes');
     if (memory.isNotEmpty) {
@@ -268,6 +273,7 @@ class AiService {
         ...chat.split('\n').map((e) => e.trim()),
       ];
       final own = all
+          .map((l) => l.replaceFirst(RegExp(r'^\[[^\]]*\]\s*'), ''))
           .where((l) => l.startsWith('Aku: '))
           .map((l) => l.substring(5).trim())
           .where((l) => l.length > 1 && l.length < 200 && !l.contains('@'))

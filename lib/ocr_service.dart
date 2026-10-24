@@ -11,7 +11,10 @@ class _Ln {
   final double right;
   final double top;
   final double bottom;
-  _Ln(this.text, this.left, this.right, this.top, this.bottom);
+  final String time;
+  final bool date;
+  _Ln(this.text, this.left, this.right, this.top, this.bottom,
+      {this.time = '', this.date = false});
 }
 
 class OcrService {
@@ -19,6 +22,20 @@ class OcrService {
   static final RegExp _tailTimeRe =
       RegExp(r'\s*[\dgGoOlI]{1,2}[:.][\dOo]{2}\s?[APap][Mm]\b.{0,3}$');
   static final RegExp _noiseRe = RegExp(r'^(\d[A-Za-z]|[A-Za-z]\d)$');
+  static final RegExp _dateRe = RegExp(
+      r'^(\d{1,2}\s+(jan|feb|mar|apr|mei|jun|jul|agu|aug|sep|okt|oct|nov|des|dec)[a-z]*(\s+\d{4})?|hari ini|kemarin|today|yesterday|senin|selasa|rabu|kamis|jumat|jum.at|sabtu|minggu|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$',
+      caseSensitive: false);
+
+  static String _normTime(String s) {
+    final m = RegExp(r'([\dgGoOlI]{1,2})[:.]([\dOo]{2})\s?([APap][Mm])')
+        .firstMatch(s);
+    if (m == null) return '';
+    String fix(String x) => x
+        .replaceAll(RegExp('[gG]'), '9')
+        .replaceAll(RegExp('[oO]'), '0')
+        .replaceAll(RegExp('[lI]'), '1');
+    return '${fix(m.group(1)!)}:${fix(m.group(2)!)} ${m.group(3)!.toUpperCase()}';
+  }
 
   /// True jika hasil OCR terlihat berantakan (dipakai untuk mode hybrid).
   static bool looksBad(String t) {
@@ -26,7 +43,7 @@ class OcrService {
     if (ls.length < 2) return true;
     var bad = 0;
     for (final l in ls) {
-      final b = l.replaceFirst(RegExp(r'^(Aku|Dia): '), '');
+      final b = l.replaceFirst(RegExp(r'^(\[[^\]]*\]\s*)?(Aku|Dia): '), '');
       if (b.length < 2 || RegExp(r'\d[:.]\d{2}').hasMatch(b)) bad++;
     }
     return bad / ls.length > 0.3;
@@ -91,21 +108,50 @@ class OcrService {
     try {
       final res = await rec.processImage(InputImage.fromFilePath(path));
       final lines = <_Ln>[];
+      final times = <_Ln>[];
       for (final b in res.blocks) {
         for (final l in b.lines) {
           final r = l.boundingBox;
-          final t = l.text.replaceAll(_tailTimeRe, '').trim();
+          final raw = l.text.trim();
+          final tm = _normTime(raw);
+          final t = raw.replaceAll(_tailTimeRe, '').trim();
+          if (tm.isNotEmpty && (t.isEmpty || _timeRe.hasMatch(raw))) {
+            times.add(_Ln('', r.left, r.right, r.top, r.bottom, time: tm));
+            continue;
+          }
           if (t.length <= 1 || _noiseRe.hasMatch(t)) continue;
           final cy = (r.top + r.bottom) / 2;
           if (cy < h * 0.10 || cy > h * 0.92) continue;
-          final cx = ((r.left + r.right) / 2) / w;
-          final wd = (r.right - r.left) / w;
-          if ((cx - 0.5).abs() < 0.08 && wd < 0.45) continue;
           if (_timeRe.hasMatch(t)) continue;
-          lines.add(_Ln(t, r.left, r.right, r.top, r.bottom));
+          lines.add(_Ln(t, r.left, r.right, r.top, r.bottom,
+              time: tm, date: _dateRe.hasMatch(t)));
         }
       }
       lines.sort((a, b) => a.top.compareTo(b.top));
+
+      // Buang iklan Telegram: baris "Iklan" + baris rapat di bawahnya (rata kiri sama).
+      final noAd = <_Ln>[];
+      double? adLeft;
+      var adBottom = 0.0;
+      for (final l in lines) {
+        final lh = l.bottom - l.top;
+        if (l.text.toLowerCase().startsWith('iklan')) {
+          adLeft = l.left;
+          adBottom = l.bottom;
+          continue;
+        }
+        if (adLeft != null &&
+            (l.left - adLeft).abs() < w * 0.03 &&
+            l.top - adBottom < lh * 0.9) {
+          adBottom = l.bottom;
+          continue;
+        }
+        adLeft = null;
+        noAd.add(l);
+      }
+      lines
+        ..clear()
+        ..addAll(noAd);
 
       // Buang kutipan reply: baris header (nama pengirim) + baris kutipan di bawahnya.
       final me = myName.trim().toLowerCase();
@@ -136,7 +182,10 @@ class OcrService {
           final last = groups.last.last;
           final gap = l.top - last.bottom;
           final lh = last.bottom - last.top;
-          if (gap < lh * 0.6 && (l.left - last.left).abs() < w * 0.04) {
+          if (!l.date &&
+              !last.date &&
+              gap < lh * 0.6 &&
+              (l.left - last.left).abs() < w * 0.04) {
             groups.last.add(l);
             continue;
           }
@@ -145,6 +194,8 @@ class OcrService {
       }
 
       final texts = <String>[];
+      final tms = <String>[];
+      final dates = <bool>[];
       final lefts = <double>[];
       final rights = <double>[];
       final cols = <List<int>?>[];
@@ -156,6 +207,26 @@ class OcrService {
           if (l.right > right) right = l.right;
         }
         texts.add(g.map((e) => e.text).join(' '));
+        dates.add(g.first.date);
+        var gt = '';
+        for (final e in g) {
+          if (e.time.isNotEmpty) gt = e.time;
+        }
+        if (gt.isEmpty) {
+          final gTop = g.first.top;
+          final gBot = g.last.bottom;
+          var best = 1e9;
+          for (final tl in times) {
+            final cyt = (tl.top + tl.bottom) / 2;
+            if (cyt < gTop - 5 || cyt > gBot + 30) continue;
+            final d = (cyt - gBot).abs();
+            if (d < best) {
+              best = d;
+              gt = tl.time;
+            }
+          }
+        }
+        tms.add(gt);
         lefts.add(left);
         rights.add(right);
         cols.add(_bubbleColor(bd, iw, ih, left, (g.first.top + g.last.bottom) / 2));
@@ -183,7 +254,12 @@ class OcrService {
         final mine = (useColor && c != null)
             ? _dist(c, rm!) < _dist(c, rd!)
             : lefts[i] > (w - rights[i]) + w * 0.04;
-        out.add('${mine ? 'Aku' : 'Dia'}: ${texts[i]}');
+        if (dates[i]) {
+          out.add('--- ${texts[i]} ---');
+          continue;
+        }
+        final tt = tms[i].isEmpty ? '' : '[${tms[i]}] ';
+        out.add('$tt${mine ? 'Aku' : 'Dia'}: ${texts[i]}');
       }
 
       final recent = out.length > 60 ? out.sublist(out.length - 60) : out;
