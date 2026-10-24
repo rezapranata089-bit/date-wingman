@@ -327,6 +327,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _editMemory(Contact c) async {
+    final memCtl = TextEditingController(text: c.memory);
+    final logCtl = TextEditingController(text: c.log.join('\n'));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text('Edit memori ${c.name}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: memCtl,
+                minLines: 4,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Ringkasan memori',
+                  hintText: 'Nama, minat, rencana, topik yang sudah dibahas',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: logCtl,
+                minLines: 4,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Pesan tersimpan (satu baris satu pesan)',
+                  helperText: 'Hapus atau perbaiki baris yang salah baca',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final lines = logCtl.text
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    widget.settings.update(() {
+      c.memory = memCtl.text.trim();
+      c.log = lines.length > 300 ? lines.sublist(lines.length - 300) : lines;
+    });
+  }
+
   Widget _contactCard(Contact c, AppSettings s) {
     final info = '${c.log.length} pesan tersimpan'
         '${s.useMemory ? '' : ' (memori nonaktif)'}';
@@ -362,6 +419,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onPressed: () => _contactDialog(edit: c),
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text('Edit'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _editMemory(c),
+                icon: const Icon(Icons.psychology_outlined, size: 18),
+                label: const Text('Edit memori'),
               ),
               OutlinedButton.icon(
                 onPressed: () => s.update(() {
