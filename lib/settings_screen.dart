@@ -20,6 +20,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _cKey;
   late final TextEditingController _cModel;
   late final TextEditingController _about;
+  late final TextEditingController _myName;
   late final TextEditingController _style;
   late final TextEditingController _prompt;
 
@@ -56,6 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cKey = TextEditingController(text: s.claudeKey);
     _cModel = TextEditingController(text: s.claudeModel);
     _about = TextEditingController(text: s.aboutMe);
+    _myName = TextEditingController(text: s.myName);
     _style = TextEditingController(text: s.styleSample);
     _prompt = TextEditingController(text: s.customPrompt);
   }
@@ -67,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cKey.dispose();
     _cModel.dispose();
     _about.dispose();
+    _myName.dispose();
     _style.dispose();
     _prompt.dispose();
     super.dispose();
@@ -203,6 +206,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 4),
                 const Text(
                   'API key disimpan di HP kamu. Untuk rilis publik, sebaiknya pakai server sendiri agar key tidak ikut di dalam aplikasi.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SectionTitle('Nama kamu di chat'),
+                _field(
+                  _myName,
+                  'Nama/username kamu',
+                  (v) => s.update(() => s.myName = v.trim()),
+                  hint: 'Contoh: Zee',
+                ),
+                const Text(
+                  'Dipakai OCR untuk mengenali kutipan reply dari pesanmu dan mengabaikannya.',
                   style: TextStyle(fontSize: 12),
                 ),
                 const SectionTitle('Tentang kamu'),

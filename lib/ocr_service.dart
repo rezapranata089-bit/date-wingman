@@ -14,9 +14,12 @@ class _Ln {
 
 class OcrService {
   static final RegExp _timeRe = RegExp(r'^\d{1,2}[:.]\d{2}(\s?[APap][Mm])?$');
+  static final RegExp _tailTimeRe =
+      RegExp(r'\s*[\dgGoOlI]{1,2}[:.][\dOo]{2}\s?[APap][Mm]\b.{0,3}$');
+  static final RegExp _noiseRe = RegExp(r'^(\d[A-Za-z]|[A-Za-z]\d)$');
 
   /// Membaca screenshot chat, mengembalikan teks berlabel "Dia:" / "Aku:".
-  static Future<String> read(String path) async {
+  static Future<String> read(String path, {String myName = ''}) async {
     final bytes = await File(path).readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
@@ -32,8 +35,8 @@ class OcrService {
       for (final b in res.blocks) {
         for (final l in b.lines) {
           final r = l.boundingBox;
-          final t = l.text.trim();
-          if (t.isEmpty) continue;
+          final t = l.text.replaceAll(_tailTimeRe, '').trim();
+          if (t.length <= 1 || _noiseRe.hasMatch(t)) continue;
           final cy = (r.top + r.bottom) / 2;
           if (cy < h * 0.10 || cy > h * 0.92) continue;
           final cx = ((r.left + r.right) / 2) / w;
@@ -44,6 +47,29 @@ class OcrService {
         }
       }
       lines.sort((a, b) => a.top.compareTo(b.top));
+
+      // Buang kutipan reply: baris header (nama pengirim) + baris kutipan di bawahnya.
+      final me = myName.trim().toLowerCase();
+      bool isHeader(String s) {
+        final x = s.toLowerCase().trim();
+        return x.contains('@') ||
+            x.startsWith('anonymous chat') ||
+            (me.isNotEmpty && x == me);
+      }
+
+      final kept = <_Ln>[];
+      for (var i = 0; i < lines.length; i++) {
+        final x = lines[i].text.toLowerCase().trim();
+        if (isHeader(lines[i].text)) {
+          i++;
+          continue;
+        }
+        if (me.isNotEmpty && x.startsWith('$me ')) continue;
+        kept.add(lines[i]);
+      }
+      lines
+        ..clear()
+        ..addAll(kept);
 
       final groups = <List<_Ln>>[];
       for (final l in lines) {

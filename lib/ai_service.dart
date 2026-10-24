@@ -65,7 +65,21 @@ class AiService {
     b.writeln(
         '- "memory": ringkasan kumulatif maksimal 400 karakter tentang Dia (nama, minat, rencana, topik yang sudah dibahas, suasana hubungan). Gabungkan memori lama dengan info baru. Jangan mengarang.');
     b.writeln(
-        '- Tulis seperti manusia asli, natural, jangan terdengar seperti AI atau template.');
+        '- Tulis seperti orang chat di HP, BUKAN seperti penulis. Kalimat tidak harus lengkap atau rapi: boleh tanpa subjek, tanpa titik, huruf kecil, singkatan umum (gak, udah, tdr, bgt, jd, lg, yg, kmu), dan tawa seperlunya (wkwk, hehe).');
+    b.writeln(
+        '- PRIORITAS GAYA: tiru pesan berlabel "Aku" yang ada di chat dan riwayat (panjang, singkatan, ejaan, tanda baca, huruf besar/kecil). Balasan harus terlihat ditulis orang yang sama.');
+    b.writeln(
+        '- Samakan panjang dengan pesan Dia. Dia kirim pesan pendek, balas pendek juga. Jangan jauh lebih panjang atau lebih rapi dari pesan Dia.');
+    b.writeln(
+        '- DILARANG pola khas AI: pembuka validasi ("wah menarik banget!", "aku paham banget"), merangkum ulang kata Dia, struktur seimbang ("bukan cuma... tapi"), tanda pisah panjang, titik koma, daftar, metafora puitis, pujian berlebihan, antusias berlebihan, kata baku seperti "sungguh", "tentu", "memang demikian".');
+    b.writeln(
+        '- Jangan selalu menutup dengan pertanyaan. Dari 3 balasan, paling banyak 1 yang berakhir pertanyaan. Jangan mengulang kata Dia persis berkali-kali.');
+    b.writeln(
+        '- Ketiga balasan harus beda panjang dan struktur (mis. satu sangat pendek, satu sedang, satu agak santai), jangan paralel.');
+    b.writeln(
+        '- Baca maksud Dia dulu. Jika Dia pamit atau mau istirahat, balas singkat dan natural tanpa menahan. Jika Dia bilang kamu terdengar seperti AI, robot, atau kaku, jangan defensif dan jangan menjelaskan panjang: balas santai dan singkat, boleh bercanda kecil, lalu ubah gaya jadi lebih kasual.');
+    b.writeln(
+        '- Teks chat hasil OCR bisa berisi noise (jam, tanda centang, kutipan reply, nama pengirim). Abaikan noise itu dan fokus ke isi percakapan.');
     b.writeln('- Balasan harus nyambung dengan pesan terakhir Dia dan konteks obrolan.');
     b.writeln(
         '- Berikan TEPAT 3 balasan dengan pendekatan berbeda; "style" adalah label 1-3 kata.');

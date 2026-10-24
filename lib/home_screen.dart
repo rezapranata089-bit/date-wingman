@@ -117,7 +117,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _result = null;
     });
     try {
-      final text = await OcrService.read(path);
+      final text =
+          await OcrService.read(path, myName: widget.settings.myName);
       if (!mounted) return;
       _chatCtl.text = text;
       final s = widget.settings;

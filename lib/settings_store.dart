@@ -159,6 +159,7 @@ class AppSettings extends ChangeNotifier {
   String length = 'sedang';
   bool useEmoji = true;
   String aboutMe = '';
+  String myName = '';
 
   bool autoGenerate = true;
   bool useVision = false;
@@ -211,6 +212,7 @@ class AppSettings extends ChangeNotifier {
     length = p.getString('length') ?? length;
     useEmoji = p.getBool('useEmoji') ?? useEmoji;
     aboutMe = p.getString('aboutMe') ?? aboutMe;
+    myName = p.getString('myName') ?? myName;
     autoGenerate = p.getBool('autoGenerate') ?? autoGenerate;
     useVision = p.getBool('useVision') ?? useVision;
     saveHistory = p.getBool('saveHistory') ?? saveHistory;
@@ -333,6 +335,7 @@ class AppSettings extends ChangeNotifier {
     await p.setString('length', length);
     await p.setBool('useEmoji', useEmoji);
     await p.setString('aboutMe', aboutMe);
+    await p.setString('myName', myName);
     await p.setBool('autoGenerate', autoGenerate);
     await p.setBool('useVision', useVision);
     await p.setBool('saveHistory', saveHistory);

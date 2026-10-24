@@ -59,8 +59,14 @@ class MainActivity : FlutterActivity() {
             if (uri != null) path = copyToCache(uri)
         }
         if (path != null) {
-            pendingPath = path
-            if (notify) channel?.invokeMethod("onCapture", path)
+            val ch = channel
+            if (notify && ch != null) {
+                pendingPath = null
+                ch.invokeMethod("onCapture", path)
+            } else {
+                pendingPath = path
+            }
+            setIntent(Intent())
         }
     }
 
